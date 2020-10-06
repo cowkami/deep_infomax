@@ -15,21 +15,21 @@ class Encoder(nn.Module):
     def __init__(self, ngpu):
         super(Encoder, self).__init__()
         self.ngpu = ngpu
-        self.conv_net = nn.Sequential(
+        self.C = nn.Sequential(
             # input is (nc) x 32 x 32
             nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf) x 16 x 16
             nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ndf * 2),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*2) x 8 x 8
+            nn.LeakyReLU(0.2, inplace=True))
+        # state size. (ndf*2) x 8 x 8
+
+        self.f = nn.Sequential(
             nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ndf * 4),
-            nn.LeakyReLU(0.2, inplace=True))
-        # output size. (ndf*4) x 4 x 4
-
-        self.fc_net = nn.Sequential(
+            nn.LeakyReLU(0.2, inplace=True),
+            # output size. (ndf*4) x 4 x 4
             nn.Conv2d(ndf * 4, ndf * 4, 4, 1, 0, bias=False),
             nn.BatchNorm2d(ndf * 4),
             nn.LeakyReLU(0.2, inplace=True),
@@ -42,10 +42,10 @@ class Encoder(nn.Module):
             nn.Linear(1024, dim_feature))
         # output size. 64
 
-    def forward(self, inputs) -> torch.Tensor:
-        out = self.conv_net(inputs)
-        out = self.fc_net(out)
-        return out
+    def forward(self, x) -> torch.Tensor:
+        MxM_features = self.C(x)
+        global_feature = self.f(MxM_features)
+        return MxM_features, global_feature
 
 
 class LocalMIDiscriminator(nn.Module):
@@ -65,14 +65,14 @@ class LocalMIDiscriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),  # 1 x 1 conv
             nn.Conv2d(512, 1, 1))
 
-    def forward(self, local_feature_maps, global_features) -> torch.Tensor:
-        n, c, h, w = local_feature_maps.shape
-        global_feature_maps = (
-            torch.ones((n, dim_feature, h, w)).to(local_feature_maps.device) *
-            global_features.reshape(*global_features.shape, 1, 1))
-        global_local_features = torch.cat(
-            (local_feature_maps, global_feature_maps), dim=1)
-        return self.net(global_local_features)
+    def forward(self, local_feature_map, global_feature) -> torch.Tensor:
+        n, c, h, w = local_feature_map.shape
+        global_feature_map = (
+            torch.ones((n, dim_feature, h, w)).to(local_feature_map.device) *
+            global_feature.reshape(*global_feature.shape, 1, 1))
+        global_local_feature = torch.cat(
+            (local_feature_map, global_feature_map), dim=1)
+        return self.net(global_local_feature)
 
 
 class DistributionDiscriminator(nn.Module):

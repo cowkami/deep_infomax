@@ -17,8 +17,8 @@ class JensenShannonMIEstimator:
         fake_feature_map = self.E.conv_net(fake_inputs)
         global_feature = self.E.fc_net(real_feature_map)
 
-        Ep = torch.mean(-sp(-self.T(real_feature_map, global_feature)))
-        Epp = torch.mean(sp(self.T(fake_feature_map, global_feature)))
+        Ep = -sp(-self.T(real_feature_map, global_feature)).mean()
+        Epp = sp(self.T(fake_feature_map, global_feature)).mean()
         return Ep - Epp
 
 
@@ -31,8 +31,8 @@ class KLDivergenceEstimator:
     def __init__(self, discriminator: DistributionDiscriminator):
         self.D = discriminator
 
-    def __call__(self, global_features: torch.Tensor,
-                 sampled_features: torch.Tensor) -> torch.Tensor:
-        Ev = torch.mean(torch.log(self.D(sampled_features)))
-        Ep = torch.mean(torch.log(1 - self.D(global_features)))
+    def __call__(self, global_feature: torch.Tensor,
+                 sampled_feature: torch.Tensor) -> torch.Tensor:
+        Ev = torch.mean(torch.log(self.D(sampled_feature)))
+        Ep = torch.mean(torch.log(1 - self.D(global_feature)))
         return Ev + Ep
