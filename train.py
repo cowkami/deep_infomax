@@ -7,7 +7,11 @@ import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 
-from networks import (Encoder, LocalMIDiscriminator, DistributionDiscriminator)
+from networks import (
+    Encoder,
+    GlobalMIDiscriminator,
+    LocalMIDiscriminator,
+    DistributionDiscriminator)
 
 from criteria import (JensenShannonMIEstimator, KLDivergenceEstimator)
 
@@ -15,6 +19,7 @@ from utils import timestamp
 
 ngpu = 1
 
+alpha = 0.1
 beta = 1
 gamma = 0.1
 
@@ -54,6 +59,9 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 netE = Encoder(ngpu)
 netE.to(device)
 
+netGMID = GlobalMIDiscriminator(ngpu)
+netGMID.to(device)
+
 netLMID = LocalMIDiscriminator(ngpu)
 netLMID.to(device)
 
@@ -61,11 +69,12 @@ netDD = DistributionDiscriminator(ngpu)
 netDD.to(device)
 
 # define criteria
-MI_estimator = JensenShannonMIEstimator(netE, netLMID)
+LMI_estimator = JensenShannonMIEstimator(netE, netLMID)
+GMI_estimator = JensenShannonMIEstimator(netE, netGMID)
 KLD_estimator = KLDivergenceEstimator(netDD)
 
-params = (list(netE.parameters()) + list(netLMID.parameters()) +
-          list(netDD.parameters()))
+params = (list(netE.parameters()) + list(netGMID.parameters()) 
+          + list(netLMID.parameters()) + list(netDD.parameters()))
 maximizer = optim.SGD(params, lr=0.001, momentum=0.9)
 minimizer = optim.SGD(netE.parameters(), lr=0.001, momentum=0.9)
 
@@ -91,11 +100,11 @@ for epoch in range(100):
         ##################################
         # argmin KLD term, prior matching.
         ##################################
-        netE.zero_grad()
+        minimizer.zero_grad()
 
-        global_features = netE(inputs)
+        _, global_features  = netE(inputs)
         # sampled from uniform distiribution
-        sampled_features = torch.rand(global_features.shape).to(device)
+        sampled_features = torch.rand(global_features.shape, device=device)
         KLD = gamma * KLD_estimator(global_features, sampled_features)
         KLD.backward()
         minimizer.step()
@@ -103,17 +112,17 @@ for epoch in range(100):
         ###################
         # argmax all terms.
         ###################
-        netE.zero_grad()
-        netDD.zero_grad()
-        netLMID.zero_grad()
+        maximizer.zero_grad()
 
         real, fake = make_real_fake_batches(inputs)
-        LocalMI = MI_estimator(real, fake)
+        globalMI = GMI_estimator(real, fake)
+        localMI = LMI_estimator(real, fake)
 
-        global_features = netE(inputs)
-        sampled_features = torch.rand(global_features.shape).to(device)
+        _, global_features = netE(inputs)
+        sampled_features = torch.rand(global_features.shape, device=device)
         KLD = KLD_estimator(global_features, sampled_features)
-        neg_objective = -(beta * LocalMI + gamma * KLD)
+
+        neg_objective = -(alpha * globalMI + beta * localMI + gamma * KLD)
         neg_objective.backward()
         maximizer.step()
 
