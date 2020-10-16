@@ -12,8 +12,8 @@ class JensenShannonMIEstimator(nn.Module):
         self.T = discriminator
 
     def forward(self, real_input, fake_input) -> torch.Tensor:
-        real_feature_map = self.E.Conv(real_input)
-        fake_feature_map = self.E.Conv(fake_input)
+        real_feature_map = self.E.conv(real_input)
+        fake_feature_map = self.E.conv(fake_input)
         global_feature = self.E.fc(real_feature_map)
 
         sp = torch.nn.Softplus()

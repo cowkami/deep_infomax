@@ -17,7 +17,7 @@ class Encoder(nn.Module):
     def __init__(self, ngpu: int):
         super(Encoder, self).__init__()
         self.ngpu = ngpu
-        self.Conv = nn.Sequential(
+        self.conv = nn.Sequential(
             # input is (nc) x 32 x 32
             nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
@@ -45,7 +45,7 @@ class Encoder(nn.Module):
         # output size. 64
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        local_feature_map = self.Conv(x)
+        local_feature_map = self.conv(x)
         global_feature = self.fc(local_feature_map)
         return local_feature_map, global_feature
 
@@ -63,7 +63,9 @@ class MIDiscriminator(nn.Module):
         L, G = self._preprocess(local_feature_map, global_feature)
         return self.net(torch.cat((L, G), dim=1))
 
-    def _preprocess(self, l_map: torch.Tensor, g_vec: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _preprocess(self,
+            l_map: torch.Tensor,
+            g_vec: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         return None, None
 
 
@@ -78,8 +80,8 @@ class GlobalMIDiscriminator(MIDiscriminator):
                                  nn.Linear(512, 1))
     
     def _preprocess(self,
-                l_map: torch.Tensor, 
-                g_vec: torch.Tensor) -> torch.Tensor:
+            l_map: torch.Tensor, 
+            g_vec: torch.Tensor) -> torch.Tensor:
         l_vec = l_map.view(-1, ndf * 2 * 8 * 8)
         return l_vec, g_vec
 
@@ -101,8 +103,8 @@ class LocalMIDiscriminator(MIDiscriminator):
             nn.Conv2d(512, 1, 1))
 
     def _preprocess(self,
-                l_map: torch.Tensor, 
-                g_vec: torch.Tensor) -> torch.Tensor:
+            l_map: torch.Tensor, 
+            g_vec: torch.Tensor) -> torch.Tensor:
         n, c, h, w = l_map.shape
         g_map = (
             torch.ones((n, dim_feature, h, w), device=g_vec.device)
